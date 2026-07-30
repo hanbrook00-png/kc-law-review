@@ -71,6 +71,7 @@
     <div class="tabs">
       <button class="tab active" data-tab="law">국가법령 검색</button>
       <button class="tab" data-tab="ordin">자치법규(조례) 검색</button>
+      <button class="tab" data-tab="calc">자동 판정 계산기</button>
     </div>
 
     <div id="tabLaw" class="tab-panel active">
@@ -89,6 +90,89 @@
         <button type="submit" class="btn btn-primary">검색</button>
       </form>
       <div id="ordinResults" class="results"></div>
+    </div>
+
+    <div id="tabCalc" class="tab-panel">
+      <p class="hint hint-inline calc-disclaimer">⚠️ 아래 계산은 산정식이 명확한 항목(주차대수·건폐율·용적률·조경면적)에 한한 <strong>참고용 자동계산</strong>입니다. 법적 최종 판단이 아니며, 조례 개정·경과규정·현장 여건에 따라 달라질 수 있으니 반드시 관할 관청 확인을 거치세요.</p>
+
+      <div class="calc-subtabs">
+        <button class="calc-subtab active" data-calc="parking">주차대수 산정</button>
+        <button class="calc-subtab" data-calc="ratio">건폐율 · 용적률 · 조경면적</button>
+      </div>
+
+      <!-- 주차대수 산정 -->
+      <div id="calcParking" class="calc-panel active">
+        <div class="field">
+          <label for="parkingRegion">적용 기준</label>
+          <select id="parkingRegion">
+            <option value="jeonju">전주시 주차장 조례 별표7 (강화기준)</option>
+            <option value="national">국가기준 참고용 (주차장법 시행령 별표1)</option>
+          </select>
+        </div>
+        <p class="hint hint-inline">전주시 외 지역은 국가기준을 참고만 하시고, 해당 지자체 주차장 조례(강화기준 가능성 높음)를 자치법규 검색 탭에서 별도 확인하세요.</p>
+
+        <div class="calc-row-adder">
+          <select id="parkingUseSelect"></select>
+          <input id="parkingAreaInput" type="text" inputmode="decimal" placeholder="면적(㎡)" />
+          <button id="btnAddParkingRow" type="button" class="btn btn-primary">행 추가</button>
+        </div>
+
+        <table class="calc-table">
+          <thead><tr><th>용도</th><th>면적(㎡)</th><th>적용기준</th><th>산정대수</th><th></th></tr></thead>
+          <tbody id="parkingRowsBody"></tbody>
+        </table>
+
+        <div id="parkingSummary" class="calc-summary"></div>
+        <button id="btnAddParkingToReport" type="button" class="btn btn-seal">이 산정 결과를 보고서에 추가</button>
+      </div>
+
+      <!-- 건폐율·용적률·조경 -->
+      <div id="calcRatio" class="calc-panel">
+        <p class="hint hint-inline">허용 기준(건폐율·용적률·조경면적률)은 대상지의 용도지역·지구단위계획·조례에 따라 다르므로, 직접 확인한 값을 입력해주세요. 계산기는 실제 설계값과 허용값을 비교해 산출근거와 적합 여부만 보여줍니다.</p>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="rAreaSite">대지면적(㎡)</label>
+            <input id="rAreaSite" type="text" inputmode="decimal" placeholder="예) 500" />
+          </div>
+          <div class="field">
+            <label for="rAreaBuilding">건축면적(㎡)</label>
+            <input id="rAreaBuilding" type="text" inputmode="decimal" placeholder="예) 240" />
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="rAreaFloorRatio">용적률 산정용 연면적(㎡)</label>
+            <input id="rAreaFloorRatio" type="text" inputmode="decimal" placeholder="예) 420 (지하층·주차장 등 제외)" />
+          </div>
+          <div class="field">
+            <label for="rAreaLandscape">조경면적(㎡)</label>
+            <input id="rAreaLandscape" type="text" inputmode="decimal" placeholder="예) 50" />
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="rMaxCoverage">허용 건폐율(%)</label>
+            <input id="rMaxCoverage" type="text" inputmode="decimal" placeholder="예) 60" />
+          </div>
+          <div class="field">
+            <label for="rMaxFar">허용 용적률(%)</label>
+            <input id="rMaxFar" type="text" inputmode="decimal" placeholder="예) 200" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="rMinLandscape">필요 조경면적률(%) — 미해당이면 비워두세요</label>
+          <input id="rMinLandscape" type="text" inputmode="decimal" placeholder="예) 10" />
+        </div>
+
+        <table class="calc-table">
+          <thead><tr><th>항목</th><th>산출근거</th><th>산출값</th><th>기준</th><th>판정</th></tr></thead>
+          <tbody id="ratioRowsBody"></tbody>
+        </table>
+
+        <button id="btnCalcRatio" type="button" class="btn btn-primary">계산하기</button>
+        <button id="btnAddRatioToReport" type="button" class="btn btn-seal">이 산정 결과를 보고서에 추가</button>
+      </div>
     </div>
   </section>
 
@@ -130,22 +214,31 @@
     </header>
 
     <section class="report-section">
-      <h2>1. 적용 국가법령</h2>
+      <h2>1. 자동 판정 결과 (주차대수 · 건폐율 · 용적률 · 조경)</h2>
+      <table class="report-calc-table" id="repCalc">
+        <thead><tr><th>항목</th><th>산출근거</th><th>산출값</th><th>기준</th><th>판정</th><th>관련법령</th></tr></thead>
+        <tbody id="repCalcBody"></tbody>
+      </table>
+      <p class="report-empty" id="repCalcEmpty">추가된 자동 판정 항목이 없습니다.</p>
+    </section>
+
+    <section class="report-section">
+      <h2>2. 참고 국가법령</h2>
       <div id="repLaws" class="report-list"></div>
     </section>
 
     <section class="report-section">
-      <h2>2. 적용 지자체 조례</h2>
+      <h2>3. 참고 지자체 조례</h2>
       <div id="repOrdins" class="report-list"></div>
     </section>
 
     <section class="report-section">
-      <h2>3. 종합 검토의견</h2>
-      <textarea id="repOpinion" class="report-opinion" placeholder="검토자 의견을 직접 작성하세요. (예: 상기 법령·조례 검토 결과, 본 사업은 ○○ 절차 이행 후 인허가 진행이 가능할 것으로 판단됨. 세부 조문은 원문 링크를 통해 재확인 요망.)"></textarea>
+      <h2>4. 종합 검토의견</h2>
+      <textarea id="repOpinion" class="report-opinion" placeholder="검토자 의견을 직접 작성하세요. (예: 상기 자동 판정 및 법령·조례 검토 결과, 본 사업은 ○○ 절차 이행 후 인허가 진행이 가능할 것으로 판단됨. 세부 조문은 원문 링크를 통해 재확인 요망.)"></textarea>
     </section>
 
     <footer class="report-footer">
-      <p>본 보고서는 법제처 국가법령정보 공동활용(Open API)에서 조회한 원문 메타데이터를 기초로 작성되었습니다. 법적 효력이 있는 최종 판단은 반드시 국가법령정보센터 원문 및 소관 관청 확인을 거쳐야 합니다.</p>
+      <p>본 보고서의 자동 판정 결과는 산정식이 명확한 항목(주차대수·건폐율·용적률·조경면적)에 대한 참고용 계산이며, 법령·조례 목록은 법제처 국가법령정보 공동활용(Open API) 원문 메타데이터를 기초로 합니다. 법적 효력이 있는 최종 판단은 반드시 국가법령정보센터·자치법규정보시스템 원문 및 소관 관청 확인을 거쳐야 합니다.</p>
     </footer>
   </article>
 </main>

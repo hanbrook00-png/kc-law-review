@@ -221,6 +221,65 @@ html, body {
 .state-msg { color: var(--ink-faint); font-size: 13px; padding: 20px 4px; }
 .state-msg.error { color: var(--seal); }
 
+/* ---------- 자동 판정 계산기 ---------- */
+.calc-disclaimer {
+  background: var(--seal-soft);
+  border: 1px solid var(--seal);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  color: var(--ink);
+  font-size: 12.5px;
+  margin-bottom: 14px;
+}
+.calc-subtabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.calc-subtab {
+  background: #fff; border: 1px solid var(--line); border-radius: 20px;
+  padding: 7px 14px; font-family: var(--font-body); font-weight: 600; font-size: 12.5px;
+  color: var(--ink-soft); cursor: pointer;
+}
+.calc-subtab.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+.calc-panel { display: none; }
+.calc-panel.active { display: block; }
+
+.calc-row-adder { display: flex; gap: 8px; margin: 14px 0; }
+.calc-row-adder select, .calc-row-adder input {
+  font-family: var(--font-body); font-size: 13px; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: var(--radius);
+}
+.calc-row-adder select { flex: 1.6; }
+.calc-row-adder input { flex: 1; }
+
+.calc-table {
+  width: 100%; border-collapse: collapse; margin: 10px 0 16px; font-size: 12.5px;
+}
+.calc-table th, .calc-table td {
+  border: 1px solid var(--line-soft); padding: 8px 10px; text-align: left;
+}
+.calc-table th {
+  background: var(--paper); font-family: var(--font-mono); font-size: 11px;
+  color: var(--ink-soft); font-weight: 600;
+}
+.calc-table td.num { font-family: var(--font-mono); text-align: right; }
+.calc-table button.row-remove {
+  border: none; background: none; color: var(--ink-faint); cursor: pointer; font-size: 14px;
+}
+.calc-table button.row-remove:hover { color: var(--seal); }
+
+.calc-summary {
+  background: var(--celadon-soft); border: 1px solid var(--celadon);
+  border-radius: var(--radius); padding: 12px 14px; margin-bottom: 14px;
+  font-size: 13.5px; color: var(--ink);
+}
+.calc-summary strong { color: var(--celadon); font-size: 16px; }
+
+.badge-verdict {
+  display: inline-block; font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+  padding: 2px 9px; border-radius: 20px;
+}
+.badge-ok { background: var(--celadon-soft); color: var(--celadon); }
+.badge-fail { background: var(--seal-soft); color: var(--seal); }
+.badge-check { background: #eee; color: var(--ink-soft); }
+
 /* ---------- Selected list ---------- */
 .selected-list { display: flex; flex-direction: column; gap: 8px; max-height: 55vh; overflow-y: auto; }
 .selected-item {
@@ -292,6 +351,14 @@ html, body {
 .report-section h2 {
   font-family: var(--font-display); font-size: 17px; border-bottom: 1px solid var(--line);
   padding-bottom: 8px; margin-bottom: 14px;
+}
+.report-calc-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 12.5px; }
+.report-calc-table th, .report-calc-table td {
+  border: 1px solid var(--line-soft); padding: 9px 10px; text-align: left; vertical-align: top;
+}
+.report-calc-table th {
+  background: var(--paper); font-family: var(--font-mono); font-size: 10.5px;
+  color: var(--ink-soft); font-weight: 600;
 }
 .report-list { display: flex; flex-direction: column; gap: 10px; }
 .report-item {

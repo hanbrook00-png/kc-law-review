@@ -25,7 +25,7 @@ const FIELD_MAP = {
     kind: ["법령구분명"],
   },
   ordin: {
-listKey: ["OrdinSearch.law", "LawSearch.law", "law", "LawSearch.Ordin", "Ordin"],
+    listKey: ["OrdinSearch.law", "LawSearch.law", "law", "LawSearch.Ordin", "Ordin"],
     title: ["자치법규명", "법령명한글"],
     mst: ["자치법규일련번호", "법령일련번호", "MST"],
     promul: ["공포일자"],
@@ -43,9 +43,38 @@ const QUICK_LAWS = [
   "건축물의 설비기준 등에 관한 규칙", "산업안전보건법",
 ];
 
+/* ============================================================================
+ * 주차대수 자동 산정 데이터
+ * 출처: 전주시 주차장 조례 별표7 (조례 제4385호, 2026.6.30. 개정), 주차장법 시행령 별표1
+ * 산정식이 명확한 "면적당 1대" 형태 용도만 자동계산 대상으로 삼았습니다.
+ * 공동주택·오피스텔(별표7 5호) 일반 세대는 세대별 전용면적 구간 산정이 필요해
+ * 이 계산기로는 정확히 산출할 수 없으므로 별도 안내만 제공합니다 — 반드시
+ * 「주택건설기준 등에 관한 규정」 제27조제1항 표를 국가법령정보센터에서 확인하세요.
+ * ========================================================================== */
+
+const PARKING_TABLE = [
+  { id: "p1", label: "위락시설", jeonju: 80, national: 100, law: "전주시 주차장 조례 별표7 1호 / 주차장법 시행령 별표1" },
+  { id: "p2", label: "문화·집회, 종교, 판매, 운수, 의료(정신·요양·격리병원 제외), 운동(골프장 등 제외), 업무(오피스텔 제외)", jeonju: 120, national: 150, law: "전주시 주차장 조례 별표7 2호 / 주차장법 시행령 별표1" },
+  { id: "p2b", label: "└ 예식장 · 장례식장 (2호 중 강화)", jeonju: 80, national: 150, law: "전주시 주차장 조례 별표7 2호 단서" },
+  { id: "p3", label: "제1종·제2종 근린생활시설, 숙박시설", jeonju: 150, national: 200, law: "전주시 주차장 조례 별표7 3호 / 주차장법 시행령 별표1" },
+  { id: "p7", label: "수련시설, 공장(지식산업센터 제외), 발전시설", jeonju: 350, national: 350, law: "전주시 주차장 조례 별표7 7호" },
+  { id: "p8", label: "창고시설", jeonju: 350, national: 400, law: "전주시 주차장 조례 별표7 8호" },
+  { id: "p9", label: "학생용 기숙사", jeonju: 350, national: 400, law: "전주시 주차장 조례 별표7 9호" },
+  { id: "p10", label: "방송통신시설 중 데이터센터", jeonju: 350, national: 400, law: "전주시 주차장 조례 별표7 10호" },
+  { id: "p11", label: "그 밖의(기타) 시설물", jeonju: 250, national: 300, law: "전주시 주차장 조례 별표7 11호" },
+  { id: "p11b", label: "└ 지식산업센터 (11호 중 강화)", jeonju: 150, national: 300, law: "전주시 주차장 조례 별표7 11호 단서" },
+];
+
+const PARKING_UNSUPPORTED_NOTE =
+  "단독주택·공동주택·오피스텔·골프장 등 세대수·정원·홀 단위 산정 항목은 이 계산기가 지원하지 않습니다. " +
+  "「주택건설기준 등에 관한 규정」 제27조제1항 및 전주시 주차장 조례 별표7 4~6호를 국가법령정보센터에서 직접 확인해주세요.";
+
 const state = {
   project: {},
   selected: [], // { key, kind: 'law'|'ordin', title, mst, promul, enforce, org, kind_ }
+  calcItems: [], // { key, category, label, formula, value, standard, verdict, relatedLaw }
+  parkingRows: [], // { useId, area }
+  ratio: {},       // 건폐율/용적률/조경 입력값 저장
 };
 
 /* ---------------- 유틸 ---------------- */
@@ -219,16 +248,25 @@ function removeFromSelection(key) {
 
 function renderSelected() {
   const listEl = document.getElementById("selectedList");
-  const count = state.selected.length;
+  const count = state.selected.length + state.calcItems.length;
   document.getElementById("selCount").textContent = count;
   document.getElementById("selCount2").textContent = count;
 
   if (count === 0) {
-    listEl.innerHTML = '<p class="empty">아직 추가된 법령/조례가 없습니다.<br>왼쪽에서 검색 후 “보고서에 추가”를 눌러주세요.</p>';
+    listEl.innerHTML = '<p class="empty">아직 추가된 법령/조례/판정 항목이 없습니다.<br>왼쪽에서 검색하거나 계산기를 사용한 뒤 “보고서에 추가”를 눌러주세요.</p>';
     return;
   }
 
   listEl.innerHTML = "";
+  state.calcItems.forEach((c) => {
+    listEl.appendChild(el("div", { class: "selected-item" }, [
+      el("div", {}, [
+        el("span", { class: "kind" }, "자동판정"),
+        el("span", { class: "title" }, `${c.label} — ${c.value} (${c.verdict})`),
+      ]),
+      el("button", { onclick: () => removeCalcItem(c.key), "aria-label": "제거" }, "✕"),
+    ]));
+  });
   state.selected.forEach((s) => {
     listEl.appendChild(el("div", { class: "selected-item" }, [
       el("div", {}, [
@@ -257,12 +295,23 @@ function bindProjectFields() {
 
 /* ---------------- 탭 ---------------- */
 
+const TAB_PANEL_IDS = { law: "tabLaw", ordin: "tabOrdin", calc: "tabCalc" };
+
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => {
     document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
     document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
     tab.classList.add("active");
-    document.getElementById(tab.dataset.tab === "law" ? "tabLaw" : "tabOrdin").classList.add("active");
+    document.getElementById(TAB_PANEL_IDS[tab.dataset.tab]).classList.add("active");
+  });
+});
+
+document.querySelectorAll(".calc-subtab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".calc-subtab").forEach((t) => t.classList.remove("active"));
+    document.querySelectorAll(".calc-panel").forEach((p) => p.classList.remove("active"));
+    tab.classList.add("active");
+    document.getElementById(tab.dataset.calc === "parking" ? "calcParking" : "calcRatio").classList.add("active");
   });
 });
 
@@ -293,6 +342,254 @@ function renderQuickChips() {
       },
     }, name));
   });
+}
+
+/* ============================================================================
+ * 자동 판정 계산기 — 주차대수
+ * ========================================================================== */
+
+function initParkingSelect() {
+  const sel = document.getElementById("parkingUseSelect");
+  PARKING_TABLE.forEach((row) => {
+    sel.appendChild(el("option", { value: row.id }, row.label));
+  });
+}
+
+function calcParkingRowUnits(row, region) {
+  const unitArea = region === "jeonju" ? row.jeonju : row.national;
+  const raw = row.area / unitArea;
+  return { unitArea, raw };
+}
+
+function renderParkingRows() {
+  const body = document.getElementById("parkingRowsBody");
+  const region = document.getElementById("parkingRegion").value;
+  body.innerHTML = "";
+
+  let sumRaw = 0;
+  state.parkingRows.forEach((r, idx) => {
+    const def = PARKING_TABLE.find((p) => p.id === r.useId);
+    if (!def) return;
+    const { unitArea, raw } = calcParkingRowUnits({ ...def, area: r.area }, region);
+    sumRaw += raw;
+
+    const tr = el("tr", {}, [
+      el("td", {}, def.label),
+      el("td", { class: "num" }, String(r.area)),
+      el("td", {}, `${unitArea}㎡당 1대`),
+      el("td", { class: "num" }, raw.toFixed(2) + "대"),
+      el("td", {}, el("button", { class: "row-remove", onclick: () => removeParkingRow(idx) }, "✕")),
+    ]);
+    body.appendChild(tr);
+  });
+
+  renderParkingSummary(sumRaw);
+}
+
+function removeParkingRow(idx) {
+  state.parkingRows.splice(idx, 1);
+  saveState();
+  renderParkingRows();
+}
+
+function finalizeParkingCount(sumRaw) {
+  if (sumRaw < 1) return 0;
+  return Math.round(sumRaw);
+}
+
+function renderParkingSummary(sumRaw) {
+  const box = document.getElementById("parkingSummary");
+  const total = finalizeParkingCount(sumRaw);
+  const disabled = total >= 10 ? Math.ceil(total * 0.03) : 0;
+  const wide = total >= 50 ? Math.ceil(total * 0.3) : 0;
+  const ev = total >= 50 ? Math.ceil(total * 0.05) : 0;
+
+  box.innerHTML = "";
+  box.appendChild(el("p", {}, [
+    "산정 결과 합계: ", el("strong", {}, raw2(sumRaw) + "대 → "), el("strong", {}, total + "대"),
+    " (소수점 0.5 이상 올림, 1대 미만은 0대 처리)",
+  ]));
+  if (total > 0) {
+    const extras = [];
+    if (disabled) extras.push(`장애인전용구획 ${disabled}대 이상 (법정대수 10대 이상 시 3%)`);
+    if (wide) extras.push(`확장형구획 ${wide}대 이상 (법정대수 50대 이상 시 30%)`);
+    if (ev) extras.push(`전기차구획 ${ev}대 이상 (법정대수 50대 이상 시 5%)`);
+    if (extras.length) box.appendChild(el("p", {}, "특례구획: " + extras.join(" · ")));
+  }
+  box.appendChild(el("p", { html: `<span style="color:var(--ink-faint)">${PARKING_UNSUPPORTED_NOTE}</span>` }));
+
+  const planField = document.getElementById("parkingPlanWrap");
+  if (!planField) {
+    const wrap = el("div", { class: "field", id: "parkingPlanWrap" }, [
+      el("label", { for: "parkingPlanInput" }, "계획(설계) 주차대수 — 적합 여부 비교용, 알고 있으면 입력"),
+      el("input", { id: "parkingPlanInput", type: "text", inputmode: "decimal", placeholder: "예) 8" }),
+    ]);
+    box.parentNode.insertBefore(wrap, box.nextSibling);
+    document.getElementById("parkingPlanInput").addEventListener("input", () => saveState());
+  }
+}
+
+function raw2(n) { return (Math.round(n * 100) / 100).toFixed(2); }
+
+document.getElementById("btnAddParkingRow").addEventListener("click", () => {
+  const useId = document.getElementById("parkingUseSelect").value;
+  const areaVal = parseFloat(document.getElementById("parkingAreaInput").value);
+  if (!useId || !areaVal || areaVal <= 0) return;
+  state.parkingRows.push({ useId, area: areaVal });
+  document.getElementById("parkingAreaInput").value = "";
+  saveState();
+  renderParkingRows();
+});
+
+document.getElementById("parkingRegion").addEventListener("change", () => {
+  saveState();
+  renderParkingRows();
+});
+
+document.getElementById("btnAddParkingToReport").addEventListener("click", () => {
+  if (state.parkingRows.length === 0) return;
+  const region = document.getElementById("parkingRegion").value;
+  let sumRaw = 0;
+  const formulaParts = [];
+  state.parkingRows.forEach((r) => {
+    const def = PARKING_TABLE.find((p) => p.id === r.useId);
+    if (!def) return;
+    const { unitArea, raw } = calcParkingRowUnits({ ...def, area: r.area }, region);
+    sumRaw += raw;
+    formulaParts.push(`${def.label} ${r.area}㎡÷${unitArea}=${raw.toFixed(2)}대`);
+  });
+  const total = finalizeParkingCount(sumRaw);
+  const planInput = document.getElementById("parkingPlanInput");
+  const planned = planInput && planInput.value ? parseFloat(planInput.value) : null;
+
+  let verdict = "확인필요";
+  if (planned !== null && !Number.isNaN(planned)) {
+    verdict = planned >= total ? "적합" : "부적합";
+  }
+
+  addCalcItem({
+    category: "주차대수",
+    label: "부설주차장 법정대수",
+    formula: formulaParts.join(" + ") + ` = 합계 ${raw2(sumRaw)}대 (반올림 → ${total}대)` +
+      (planned !== null ? ` · 계획대수 ${planned}대와 비교` : ""),
+    value: `법정 ${total}대` + (planned !== null ? ` / 계획 ${planned}대` : ""),
+    standard: region === "jeonju" ? "전주시 주차장 조례 별표7" : "주차장법 시행령 별표1 (참고)",
+    verdict,
+    relatedLaw: "주차장법, 주차장법 시행령, " + (region === "jeonju" ? "전주시 주차장 조례" : "(해당 지자체 주차장 조례 별도 확인 필요)"),
+  });
+});
+
+/* ============================================================================
+ * 자동 판정 계산기 — 건폐율 · 용적률 · 조경면적
+ * ========================================================================== */
+
+function computeRatios() {
+  const site = parseFloat(document.getElementById("rAreaSite").value);
+  const building = parseFloat(document.getElementById("rAreaBuilding").value);
+  const floorRatioArea = parseFloat(document.getElementById("rAreaFloorRatio").value);
+  const landscape = parseFloat(document.getElementById("rAreaLandscape").value);
+  const maxCoverage = parseFloat(document.getElementById("rMaxCoverage").value);
+  const maxFar = parseFloat(document.getElementById("rMaxFar").value);
+  const minLandscape = document.getElementById("rMinLandscape").value
+    ? parseFloat(document.getElementById("rMinLandscape").value) : null;
+
+  const results = [];
+
+  if (site > 0 && !Number.isNaN(building)) {
+    const coverage = (building / site) * 100;
+    const ok = !Number.isNaN(maxCoverage) ? coverage <= maxCoverage : null;
+    results.push({
+      category: "건폐율", label: "건폐율",
+      formula: `건축면적 ${building}㎡ ÷ 대지면적 ${site}㎡ × 100`,
+      value: coverage.toFixed(2) + "%",
+      standard: !Number.isNaN(maxCoverage) ? `허용 ${maxCoverage}% 이하` : "허용 기준 미입력",
+      verdict: ok === null ? "확인필요" : (ok ? "적합" : "부적합"),
+      relatedLaw: "국토의 계획 및 이용에 관한 법률 제77조, 건축법 제55조",
+    });
+  }
+
+  if (site > 0 && !Number.isNaN(floorRatioArea)) {
+    const far = (floorRatioArea / site) * 100;
+    const ok = !Number.isNaN(maxFar) ? far <= maxFar : null;
+    results.push({
+      category: "용적률", label: "용적률",
+      formula: `용적률 산정용 연면적 ${floorRatioArea}㎡ ÷ 대지면적 ${site}㎡ × 100`,
+      value: far.toFixed(2) + "%",
+      standard: !Number.isNaN(maxFar) ? `허용 ${maxFar}% 이하` : "허용 기준 미입력",
+      verdict: ok === null ? "확인필요" : (ok ? "적합" : "부적합"),
+      relatedLaw: "국토의 계획 및 이용에 관한 법률 제78조, 건축법 제56조",
+    });
+  }
+
+  if (site > 0 && !Number.isNaN(landscape) && minLandscape !== null) {
+    const ratio = (landscape / site) * 100;
+    const ok = ratio >= minLandscape;
+    results.push({
+      category: "조경면적", label: "조경면적률",
+      formula: `조경면적 ${landscape}㎡ ÷ 대지면적 ${site}㎡ × 100`,
+      value: ratio.toFixed(2) + "%",
+      standard: `필요 ${minLandscape}% 이상`,
+      verdict: ok ? "적합" : "부적합",
+      relatedLaw: "건축법 제42조, 건축법 시행령 제27조 (조경 기준은 지자체 조례로 강화될 수 있음)",
+    });
+  }
+
+  return results;
+}
+
+function renderRatioResults() {
+  const body = document.getElementById("ratioRowsBody");
+  body.innerHTML = "";
+  const results = computeRatios();
+  state._ratioResults = results;
+
+  if (results.length === 0) {
+    body.appendChild(el("tr", {}, el("td", { colspan: "5", class: "state-msg" }, "대지면적과 최소 하나의 비교값을 입력한 뒤 계산하기를 눌러주세요.")));
+    return;
+  }
+
+  results.forEach((r) => {
+    body.appendChild(el("tr", {}, [
+      el("td", {}, r.label),
+      el("td", {}, r.formula),
+      el("td", { class: "num" }, r.value),
+      el("td", {}, r.standard),
+      el("td", {}, verdictBadge(r.verdict)),
+    ]));
+  });
+}
+
+function verdictBadge(verdict) {
+  const cls = verdict === "적합" ? "badge-ok" : verdict === "부적합" ? "badge-fail" : "badge-check";
+  return el("span", { class: `badge-verdict ${cls}` }, verdict);
+}
+
+document.getElementById("btnCalcRatio").addEventListener("click", () => {
+  ["rAreaSite", "rAreaBuilding", "rAreaFloorRatio", "rAreaLandscape", "rMaxCoverage", "rMaxFar", "rMinLandscape"]
+    .forEach((id) => { state.ratio[id] = document.getElementById(id).value; });
+  saveState();
+  renderRatioResults();
+});
+
+document.getElementById("btnAddRatioToReport").addEventListener("click", () => {
+  const results = state._ratioResults && state._ratioResults.length ? state._ratioResults : computeRatios();
+  if (!results.length) return;
+  results.forEach((r) => addCalcItem(r));
+});
+
+/* ---------------- 자동 판정 항목 공통 처리 ---------------- */
+
+function addCalcItem(item) {
+  const key = `calc:${item.category}:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`;
+  state.calcItems.push({ key, ...item });
+  saveState();
+  renderSelected();
+}
+
+function removeCalcItem(key) {
+  state.calcItems = state.calcItems.filter((c) => c.key !== key);
+  saveState();
+  renderSelected();
 }
 
 /* ---------------- 화면 전환 ---------------- */
@@ -330,10 +627,32 @@ function renderReport() {
 
   renderReportList("repLaws", laws, "추가된 국가법령이 없습니다.");
   renderReportList("repOrdins", ordins, "추가된 자치법규가 없습니다.");
+  renderReportCalc();
 
   const opinionEl = document.getElementById("repOpinion");
   if (state.opinion) opinionEl.value = state.opinion;
   opinionEl.oninput = () => { state.opinion = opinionEl.value; saveState(); };
+}
+
+function renderReportCalc() {
+  const body = document.getElementById("repCalcBody");
+  const emptyMsg = document.getElementById("repCalcEmpty");
+  body.innerHTML = "";
+  if (state.calcItems.length === 0) {
+    emptyMsg.style.display = "block";
+    return;
+  }
+  emptyMsg.style.display = "none";
+  state.calcItems.forEach((c) => {
+    body.appendChild(el("tr", {}, [
+      el("td", {}, c.label),
+      el("td", {}, c.formula),
+      el("td", {}, c.value),
+      el("td", {}, c.standard),
+      el("td", {}, verdictBadge(c.verdict)),
+      el("td", {}, c.relatedLaw || "-"),
+    ]));
+  });
 }
 
 function renderReportList(elId, items, emptyMsg) {
@@ -358,7 +677,17 @@ function renderReportList(elId, items, emptyMsg) {
 
 /* ---------------- 초기화 ---------------- */
 
+function restoreRatioInputs() {
+  Object.entries(state.ratio || {}).forEach(([id, val]) => {
+    const node = document.getElementById(id);
+    if (node && val) node.value = val;
+  });
+}
+
 loadState();
 bindProjectFields();
 renderQuickChips();
+initParkingSelect();
+renderParkingRows();
+restoreRatioInputs();
 renderSelected();
