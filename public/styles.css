@@ -221,6 +221,10 @@ html, body {
 .state-msg { color: var(--ink-faint); font-size: 13px; padding: 20px 4px; }
 .state-msg.error { color: var(--seal); }
 
+.hint-warn { color: var(--seal); min-height: 16px; }
+.hint-warn:empty { display: none; }
+.btn-block-sm { width: 100%; justify-content: center; margin: 10px 0 6px; font-size: 12.5px; padding: 8px 12px; }
+
 /* ---------- 자동 판정 계산기 ---------- */
 .calc-disclaimer {
   background: var(--seal-soft);
@@ -346,6 +350,15 @@ html, body {
 .report-meta dt { font-size: 11px; color: var(--ink-faint); margin-bottom: 3px; }
 .report-meta dd { margin: 0; font-weight: 600; font-size: 14px; }
 .report-note { margin-top: 18px; font-size: 13px; color: var(--ink-soft); }
+.report-verdict-banner {
+  margin-top: 20px; padding: 12px 18px; border-radius: var(--radius);
+  font-family: var(--font-display); font-weight: 700; font-size: 15px;
+  display: inline-block;
+}
+.report-verdict-banner.v-ok { background: var(--celadon-soft); color: var(--celadon); border: 1px solid var(--celadon); }
+.report-verdict-banner.v-fail { background: var(--seal-soft); color: var(--seal); border: 1px solid var(--seal); }
+.report-verdict-banner.v-check { background: #eee; color: var(--ink-soft); border: 1px solid var(--line); }
+.report-verdict-banner.v-empty { display: none; }
 
 .report-section { margin-bottom: 36px; }
 .report-section h2 {

@@ -111,11 +111,15 @@
         </div>
         <p class="hint hint-inline">전주시 외 지역은 국가기준을 참고만 하시고, 해당 지자체 주차장 조례(강화기준 가능성 높음)를 자치법규 검색 탭에서 별도 확인하세요.</p>
 
+        <button id="btnFillFromProject" type="button" class="btn btn-ghost btn-block-sm">01 · 프로젝트 개요값으로 자동 채우기 (용도 · 연면적)</button>
+        <p id="parkingFillMsg" class="hint hint-inline hint-warn"></p>
+
         <div class="calc-row-adder">
           <select id="parkingUseSelect"></select>
           <input id="parkingAreaInput" type="text" inputmode="decimal" placeholder="면적(㎡)" />
           <button id="btnAddParkingRow" type="button" class="btn btn-primary">행 추가</button>
         </div>
+        <p id="parkingAddMsg" class="hint hint-inline hint-warn"></p>
 
         <table class="calc-table">
           <thead><tr><th>용도</th><th>면적(㎡)</th><th>적용기준</th><th>산정대수</th><th></th></tr></thead>
@@ -211,6 +215,7 @@
         <div><dt>작성일</dt><dd id="repDate">-</dd></div>
       </dl>
       <p class="report-note" id="repNote"></p>
+      <div id="repVerdictBanner" class="report-verdict-banner"></div>
     </header>
 
     <section class="report-section">

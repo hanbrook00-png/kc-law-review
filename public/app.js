@@ -431,10 +431,58 @@ function renderParkingSummary(sumRaw) {
 
 function raw2(n) { return (Math.round(n * 100) / 100).toFixed(2); }
 
+const PARKING_KEYWORD_MAP = [
+  [["위락시설"], "p1"],
+  [["예식장", "장례식장"], "p2b"],
+  [["문화", "집회", "종교시설", "판매시설", "운수시설", "의료시설", "운동시설", "업무시설", "공공용시설"], "p2"],
+  [["근린생활시설", "숙박시설"], "p3"],
+  [["수련시설", "공장", "발전시설"], "p7"],
+  [["창고"], "p8"],
+  [["기숙사"], "p9"],
+  [["데이터센터"], "p10"],
+  [["지식산업센터"], "p11b"],
+];
+
+function matchParkingUse(useText) {
+  if (!useText) return null;
+  for (const [keywords, id] of PARKING_KEYWORD_MAP) {
+    if (keywords.some((k) => useText.includes(k))) return id;
+  }
+  return null;
+}
+
+document.getElementById("btnFillFromProject").addEventListener("click", () => {
+  const msg = document.getElementById("parkingFillMsg");
+  const useText = (state.project.pUse || "").trim();
+  const areaText = (state.project.pArea || "").trim();
+  const matchedId = matchParkingUse(useText);
+
+  if (!useText && !areaText) {
+    msg.textContent = "먼저 왼쪽 '01·프로젝트 개요'에 건축물 용도와 연면적을 입력해주세요.";
+    return;
+  }
+  if (matchedId) {
+    document.getElementById("parkingUseSelect").value = matchedId;
+  }
+  if (areaText) {
+    document.getElementById("parkingAreaInput").value = areaText;
+  }
+  msg.textContent = matchedId
+    ? "용도와 면적을 채웠습니다. 필요하면 용도를 다시 선택한 뒤 '행 추가'를 눌러주세요."
+    : `'${useText}'와 자동으로 매칭되는 용도를 찾지 못했습니다. 위 목록에서 직접 선택해주세요 (면적만 채웠습니다).`;
+});
+
 document.getElementById("btnAddParkingRow").addEventListener("click", () => {
+  const addMsg = document.getElementById("parkingAddMsg");
   const useId = document.getElementById("parkingUseSelect").value;
-  const areaVal = parseFloat(document.getElementById("parkingAreaInput").value);
-  if (!useId || !areaVal || areaVal <= 0) return;
+  const areaRaw = document.getElementById("parkingAreaInput").value;
+  const areaVal = parseFloat(areaRaw);
+
+  if (!areaRaw || Number.isNaN(areaVal) || areaVal <= 0) {
+    addMsg.textContent = "면적(㎡)을 숫자로 입력한 뒤 '행 추가'를 눌러주세요.";
+    return;
+  }
+  addMsg.textContent = "";
   state.parkingRows.push({ useId, area: areaVal });
   document.getElementById("parkingAreaInput").value = "";
   saveState();
@@ -628,10 +676,34 @@ function renderReport() {
   renderReportList("repLaws", laws, "추가된 국가법령이 없습니다.");
   renderReportList("repOrdins", ordins, "추가된 자치법규가 없습니다.");
   renderReportCalc();
+  renderVerdictBanner();
 
   const opinionEl = document.getElementById("repOpinion");
   if (state.opinion) opinionEl.value = state.opinion;
   opinionEl.oninput = () => { state.opinion = opinionEl.value; saveState(); };
+}
+
+function renderVerdictBanner() {
+  const banner = document.getElementById("repVerdictBanner");
+  const items = state.calcItems;
+  banner.className = "report-verdict-banner";
+  if (items.length === 0) {
+    banner.classList.add("v-empty");
+    banner.textContent = "";
+    return;
+  }
+  const hasFail = items.some((c) => c.verdict === "부적합");
+  const hasCheck = items.some((c) => c.verdict === "확인필요");
+  if (hasFail) {
+    banner.classList.add("v-fail");
+    banner.textContent = "종합 판정: 부적합 항목 있음 — 아래 자동 판정 결과 표를 확인하세요";
+  } else if (hasCheck) {
+    banner.classList.add("v-check");
+    banner.textContent = "종합 판정: 일부 항목 확인 필요 — 계획 대수·허용 기준 등을 입력해 재계산하세요";
+  } else {
+    banner.classList.add("v-ok");
+    banner.textContent = "종합 판정: 자동 판정 대상 항목 전체 적합";
+  }
 }
 
 function renderReportCalc() {
