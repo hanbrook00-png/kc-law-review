@@ -84,6 +84,22 @@ const STAIR_MULTI_TABLE = [
   { id: "h5", label: "지하층", floorMin: null, threshold: 200, note: "제34조제2항제5호", isBasement: true },
 ];
 
+/* ============================================================================
+ * 방화구획 완화·제외 대상 데이터 — 건축법 시행령 제46조제2항 1~8호
+ * 출처: 법제처 국가법령정보 공동활용 API 실물 응답으로 원문 대조 확인
+ * ========================================================================== */
+
+const FIRE_RELAX_ITEMS = [
+  { id: "r1", label: "문화·집회시설(동·식물원 제외)·종교시설·운동시설·장례시설의 거실 중 시선·활동공간 확보를 위해 불가피한 부분", note: "제46조제2항제1호" },
+  { id: "r2", label: "물품 제조·가공·운반 등에 필요한 고정식 대형 기기·설비 설치를 위해 불가피한 부분 (지하층은 외벽 1/4 이상 개방 조건 별도)", note: "제46조제2항제2호" },
+  { id: "r3", label: "계단실·복도·승강장 및 승강로로서 다른 부분과 방화구획된 부분", note: "제46조제2항제3호" },
+  { id: "r4", label: "최상층 또는 피난층의 대규모 회의장·강당·스카이라운지·로비·피난안전구역 등", note: "제46조제2항제4호" },
+  { id: "r5", label: "복층형 공동주택의 세대별 층간 바닥 부분", note: "제46조제2항제5호" },
+  { id: "r6", label: "주요구조부가 내화구조 또는 불연재료로 된 주차장", note: "제46조제2항제6호" },
+  { id: "r7", label: "단독주택, 동물 및 식물 관련 시설, 국방·군사시설(집회·체육·창고 용도)", note: "제46조제2항제7호" },
+  { id: "r8", label: "1층·2층 일부를 동일 용도로 사용하며 다른 부분과 방화구획된 부분(바닥면적 합계 500㎡ 이하)", note: "제46조제2항제8호" },
+];
+
 const state = {
   project: {},
   selected: [], // { key, kind: 'law'|'ordin', title, mst, promul, enforce, org, kind_ }
@@ -91,6 +107,7 @@ const state = {
   parkingRows: [], // { useId, area }
   ratio: {},       // 건폐율/용적률/조경 입력값 저장
   stair: {},       // 직통계단·피난거리 입력값 저장
+  fire: {},        // 방화구획 입력값 저장
 };
 
 /* ---------------- 유틸 ---------------- */
@@ -322,7 +339,7 @@ document.querySelectorAll(".tab").forEach((tab) => {
   });
 });
 
-const CALC_PANEL_IDS = { parking: "calcParking", ratio: "calcRatio", stair: "calcStair" };
+const CALC_PANEL_IDS = { parking: "calcParking", ratio: "calcRatio", stair: "calcStair", firecompart: "calcFireCompart" };
 
 document.querySelectorAll(".calc-subtab").forEach((tab) => {
   tab.addEventListener("click", () => {
@@ -882,6 +899,181 @@ document.getElementById("btnAddStairToReport").addEventListener("click", () => {
   results.forEach((r) => addCalcItem(r));
 });
 
+/* ============================================================================
+ * 자동 판정 계산기 — 방화구획
+ * 설치대상·완화대상: 건축법 시행령 제46조 / 구획 단위면적 수치: 「건축물의 피난ㆍ방화구조
+ * 등의 기준에 관한 규칙」 제14조 (시행령 제46조제1항이 국토교통부령으로 위임한 기준)
+ * ========================================================================== */
+
+function initFireRelaxChecklist() {
+  const wrap = document.getElementById("fireRelaxChecklist");
+  FIRE_RELAX_ITEMS.forEach((item) => {
+    wrap.appendChild(el("div", { class: "field-check" }, [
+      el("input", { type: "checkbox", id: `fc_${item.id}` }),
+      el("label", { for: `fc_${item.id}` }, `${item.label} (${item.note})`),
+    ]));
+  });
+}
+
+function computeFireTarget() {
+  const areaRaw = document.getElementById("fcAreaTotal").value;
+  const area = parseFloat(areaRaw);
+  if (!areaRaw || Number.isNaN(area)) return null;
+
+  const fireResistant = document.getElementById("fcFireResistant").checked;
+  const installedRaw = document.getElementById("fcInstalled").value;
+  const target = fireResistant && area > 1000;
+
+  let verdict = "확인필요";
+  if (installedRaw) {
+    const installed = installedRaw === "yes";
+    verdict = target ? (installed ? "적합" : "부적합") : "적합";
+  }
+
+  return {
+    category: "방화구획",
+    label: "방화구획 설치대상",
+    formula: `연면적 ${area}㎡ (1,000㎡ ${area > 1000 ? "초과" : "이하"}) / 주요구조부 내화구조·불연재료 ${fireResistant ? "해당" : "미해당"}`,
+    value: target ? "설치대상" : "설치대상 아님",
+    standard: "연면적 1,000㎡ 초과 + 내화구조/불연재료",
+    verdict,
+    relatedLaw: "건축법 시행령 제46조제1항",
+  };
+}
+
+function computeFireCompartArea() {
+  const floorBand = document.getElementById("fcFloorBand").value;
+  if (!floorBand) return null;
+
+  const compartRaw = document.getElementById("fcCompartArea").value;
+  const compart = parseFloat(compartRaw);
+  if (!compartRaw || Number.isNaN(compart)) return null;
+
+  const sprinkler = document.getElementById("fcSprinkler").checked;
+  const noncomb = document.getElementById("fcNoncombFinish").checked;
+
+  let allowed, basis;
+  if (floorBand === "10below") {
+    allowed = sprinkler ? 3000 : 1000;
+    basis = sprinkler
+      ? "10층 이하 + 스프링클러 등 자동식 소화설비 설치 → 3,000㎡ 이내마다 (규칙 제14조제1항제1호)"
+      : "10층 이하 → 1,000㎡ 이내마다 (규칙 제14조제1항제1호)";
+  } else if (noncomb) {
+    allowed = sprinkler ? 1500 : 500;
+    basis = sprinkler
+      ? "11층 이상 + 벽·반자 불연재료 마감 + 스프링클러 → 1,500㎡ 이내마다 (규칙 제14조제1항제3호 단서)"
+      : "11층 이상 + 벽·반자 불연재료 마감 → 500㎡ 이내마다 (규칙 제14조제1항제3호 단서)";
+  } else {
+    allowed = sprinkler ? 600 : 200;
+    basis = sprinkler
+      ? "11층 이상 + 스프링클러 등 자동식 소화설비 설치 → 600㎡ 이내마다 (규칙 제14조제1항제3호)"
+      : "11층 이상 → 200㎡ 이내마다 (규칙 제14조제1항제3호)";
+  }
+
+  const ok = compart <= allowed;
+  return {
+    category: "방화구획",
+    label: "구획 단위면적",
+    formula: `계획 구획면적 ${compart}㎡ vs 허용 ${allowed}㎡ (${basis})`,
+    value: `${compart}㎡`,
+    standard: `${allowed}㎡ 이내마다`,
+    verdict: ok ? "적합" : "부적합",
+    relatedLaw: "건축물의 피난ㆍ방화구조 등의 기준에 관한 규칙 제14조제1항",
+  };
+}
+
+function computeFireFloorRule() {
+  const floorBand = document.getElementById("fcFloorBand").value;
+  if (!floorBand) return null;
+  return {
+    category: "방화구획",
+    label: "매층 구획 원칙",
+    formula: "지하 1층에서 지상으로 직접 연결되는 경사로 부위를 제외하고, 층마다 구획해야 함",
+    value: "매층 구획 필요",
+    standard: "규칙 제14조제1항제2호",
+    verdict: "확인필요",
+    relatedLaw: "건축물의 피난ㆍ방화구조 등의 기준에 관한 규칙 제14조제1항제2호",
+  };
+}
+
+function computeFireRelax() {
+  const checked = FIRE_RELAX_ITEMS.filter((item) => document.getElementById(`fc_${item.id}`).checked);
+  if (checked.length === 0) return null;
+  return {
+    category: "방화구획",
+    label: "완화·제외 대상 해당",
+    formula: checked.map((c) => `${c.label} (${c.note})`).join(" / "),
+    value: `${checked.length}개 항목 해당`,
+    standard: "제46조제2항 각 호",
+    verdict: "확인필요",
+    relatedLaw: "건축법 시행령 제46조제2항 (해당 부분은 방화구획 적용 제외 또는 완화 가능 — 세부 요건 원문 확인 필요)",
+  };
+}
+
+function computeFireAll() {
+  const results = [];
+  const t = computeFireTarget();
+  if (t) results.push(t);
+  const c = computeFireCompartArea();
+  if (c) results.push(c);
+  const f = computeFireFloorRule();
+  if (f) results.push(f);
+  const r = computeFireRelax();
+  if (r) results.push(r);
+  return results;
+}
+
+function renderFireCompartResults() {
+  const body = document.getElementById("fireCompartRowsBody");
+  body.innerHTML = "";
+  const results = computeFireAll();
+  state._fireResults = results;
+
+  if (results.length === 0) {
+    body.appendChild(el("tr", {}, el("td", { colspan: "5", class: "state-msg" }, "A·B·C 중 값을 입력하거나 체크한 항목만 계산됩니다. 위에 값을 입력한 뒤 계산하기를 눌러주세요.")));
+    return;
+  }
+
+  results.forEach((r) => {
+    body.appendChild(el("tr", {}, [
+      el("td", {}, r.label),
+      el("td", {}, r.formula),
+      el("td", { class: "num" }, r.value),
+      el("td", {}, r.standard),
+      el("td", {}, verdictBadge(r.verdict)),
+    ]));
+  });
+}
+
+const FIRE_TEXT_FIELDS = ["fcAreaTotal", "fcInstalled", "fcFloorBand", "fcCompartArea"];
+const FIRE_CHECK_FIELDS = ["fcFireResistant", "fcSprinkler", "fcNoncombFinish", ...FIRE_RELAX_ITEMS.map((item) => `fc_${item.id}`)];
+
+function saveFireInputs() {
+  FIRE_TEXT_FIELDS.forEach((id) => { state.fire[id] = document.getElementById(id).value; });
+  FIRE_CHECK_FIELDS.forEach((id) => { state.fire[id] = document.getElementById(id).checked; });
+  saveState();
+}
+
+function restoreFireInputs() {
+  FIRE_TEXT_FIELDS.forEach((id) => {
+    if (state.fire[id] !== undefined) document.getElementById(id).value = state.fire[id];
+  });
+  FIRE_CHECK_FIELDS.forEach((id) => {
+    if (state.fire[id] !== undefined) document.getElementById(id).checked = state.fire[id];
+  });
+}
+
+document.getElementById("btnCalcFireCompart").addEventListener("click", () => {
+  saveFireInputs();
+  renderFireCompartResults();
+});
+
+document.getElementById("btnAddFireCompartToReport").addEventListener("click", () => {
+  const results = state._fireResults && state._fireResults.length ? state._fireResults : computeFireAll();
+  if (!results.length) return;
+  results.forEach((r) => addCalcItem(r));
+});
+
 /* ---------------- 자동 판정 항목 공통 처리 ---------------- */
 
 function addCalcItem(item) {
@@ -1021,4 +1213,6 @@ renderParkingRows();
 restoreRatioInputs();
 initStairMultiSelect();
 restoreStairInputs();
+initFireRelaxChecklist();
+restoreFireInputs();
 renderSelected();

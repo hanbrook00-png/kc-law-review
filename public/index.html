@@ -99,6 +99,7 @@
         <button class="calc-subtab active" data-calc="parking">주차대수 산정</button>
         <button class="calc-subtab" data-calc="ratio">건폐율 · 용적률 · 조경면적</button>
         <button class="calc-subtab" data-calc="stair">직통계단 · 피난거리</button>
+        <button class="calc-subtab" data-calc="firecompart">방화구획</button>
       </div>
 
       <!-- 주차대수 산정 -->
@@ -268,6 +269,58 @@
 
         <button id="btnCalcStair" type="button" class="btn btn-primary">계산하기</button>
         <button id="btnAddStairToReport" type="button" class="btn btn-seal">이 산정 결과를 보고서에 추가</button>
+      </div>
+
+      <!-- 방화구획 -->
+      <div id="calcFireCompart" class="calc-panel">
+        <p class="hint hint-inline">"방화구획을 해야 하는지"·"완화·제외 대상인지"는 건축법 시행령 제46조, 실제 <strong>구획 면적 수치 기준</strong>은 국토교통부령 「건축물의 피난ㆍ방화구조 등의 기준에 관한 규칙」 제14조에 있습니다(시행령이 국토교통부령에 위임). A/B/C 각 블록은 값을 입력한 항목만 계산됩니다.</p>
+
+        <h3 class="calc-block-title">A. 방화구획 설치대상 판정 (시행령 제46조제1항)</h3>
+        <div class="field-row">
+          <div class="field">
+            <label for="fcAreaTotal">연면적(㎡)</label>
+            <input id="fcAreaTotal" type="text" inputmode="decimal" placeholder="예) 1500" />
+          </div>
+          <div class="field">
+            <label for="fcInstalled">실제 방화구획 계획 여부</label>
+            <select id="fcInstalled">
+              <option value="">선택 안 함</option>
+              <option value="yes">설치함</option>
+              <option value="no">설치 안 함</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-check"><input type="checkbox" id="fcFireResistant" /><label for="fcFireResistant">주요구조부가 내화구조 또는 불연재료</label></div>
+
+        <h3 class="calc-block-title">B. 구획 단위면적 기준 (규칙 제14조제1항제1호·제3호)</h3>
+        <div class="field-row">
+          <div class="field">
+            <label for="fcFloorBand">층수 구간</label>
+            <select id="fcFloorBand">
+              <option value="">선택 안 함</option>
+              <option value="10below">10층 이하</option>
+              <option value="11above">11층 이상</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="fcCompartArea">계획(설계) 구획 단위면적(㎡)</label>
+            <input id="fcCompartArea" type="text" inputmode="decimal" placeholder="예) 950" />
+          </div>
+        </div>
+        <div class="field-check"><input type="checkbox" id="fcSprinkler" /><label for="fcSprinkler">스프링클러 등 자동식 소화설비 설치</label></div>
+        <div class="field-check"><input type="checkbox" id="fcNoncombFinish" /><label for="fcNoncombFinish">(11층 이상만 해당) 벽·반자의 실내 접하는 부분 마감을 불연재료로 함</label></div>
+
+        <h3 class="calc-block-title">C. 완화 · 제외 대상 체크 (시행령 제46조제2항)</h3>
+        <p class="hint hint-inline">해당하는 부분이 있으면 방화구획을 적용하지 않거나 완화할 수 있습니다. 판정이 아니라 "확인 대상" 안내입니다.</p>
+        <div id="fireRelaxChecklist"></div>
+
+        <table class="calc-table">
+          <thead><tr><th>항목</th><th>산출근거</th><th>산출값</th><th>기준</th><th>판정</th></tr></thead>
+          <tbody id="fireCompartRowsBody"></tbody>
+        </table>
+
+        <button id="btnCalcFireCompart" type="button" class="btn btn-primary">계산하기</button>
+        <button id="btnAddFireCompartToReport" type="button" class="btn btn-seal">이 산정 결과를 보고서에 추가</button>
       </div>
     </div>
   </section>
