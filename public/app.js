@@ -755,8 +755,10 @@ function computeStairEvac() {
   const installedRaw = document.getElementById("stPeInstalled").value;
 
   const article1Target = (floorType === "above" && floorNum >= 5) || (floorType === "below" && floorNum >= 2);
-  const article1Exception = fireResistant && (
-    (floorType === "above" && floorNum >= 5 && !Number.isNaN(area) && area <= 200) || compart
+  // 제35조제1항 단서 1호·2호는 문언상 "5층 이상인 층"만을 대상으로 하므로,
+  // 지하 2층 이하인 층에는 이 예외(단서)가 적용되지 않는다.
+  const article1Exception = fireResistant && floorType === "above" && floorNum >= 5 && (
+    (!Number.isNaN(area) && area <= 200) || compart
   );
 
   const specialThreshold = apartment ? 16 : 11;
