@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>법규검토 · 국가법령 · 자치법규 실시간 검토 보고서</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700;900&family=Pretendard:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <svg class="brand-seal" viewBox="0 0 60 60" aria-hidden="true">
+        <circle cx="30" cy="30" r="27" fill="none" stroke="currentColor" stroke-width="3"/>
+        <text x="30" y="26" text-anchor="middle" font-size="13" font-weight="700" fill="currentColor">法規</text>
+        <text x="30" y="42" text-anchor="middle" font-size="10" font-weight="500" fill="currentColor">검토</text>
+      </svg>
+      <div class="brand-text">
+        <h1>법규검토 워크벤치</h1>
+        <p>국가법령 · 지자체 조례 실시간 조회 &amp; 검토 보고서 생성</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <span class="src-badge" title="법제처 국가법령정보 공동활용 Open API">법제처 Open API 연동</span>
+      <button id="btnGoReport" class="btn btn-seal">검토 보고서 보기 <span id="selCount" class="count-pill">0</span></button>
+    </div>
+  </div>
+</header>
+
+<main id="viewSearch" class="workbench">
+
+  <!-- 좌측: 프로젝트 정보 -->
+  <section class="panel panel-project">
+    <h2 class="panel-title">01 · 프로젝트 개요</h2>
+    <div class="field">
+      <label for="pName">사업명</label>
+      <input id="pName" type="text" placeholder="예) 전주 ○○ KC 컨테이너하우스 신축공사" />
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label for="pRegion">대상 지자체</label>
+        <input id="pRegion" type="text" placeholder="예) 전주시" />
+      </div>
+      <div class="field">
+        <label for="pUse">건축물 용도</label>
+        <input id="pUse" type="text" placeholder="예) 제2종근린생활시설" />
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label for="pArea">연면적(㎡)</label>
+        <input id="pArea" type="text" inputmode="decimal" placeholder="예) 320" />
+      </div>
+      <div class="field">
+        <label for="pFloors">규모(층)</label>
+        <input id="pFloors" type="text" placeholder="예) 지상 2층" />
+      </div>
+    </div>
+    <div class="field">
+      <label for="pNote">비고 / 특이사항</label>
+      <textarea id="pNote" rows="3" placeholder="예) 컨테이너 모듈러 구조, 가설건축물 여부 등"></textarea>
+    </div>
+    <p class="hint">여기 입력한 내용은 자동으로 저장되고, 검토 보고서 표지에 그대로 반영됩니다.</p>
+  </section>
+
+  <!-- 중앙: 검색 -->
+  <section class="panel panel-search">
+    <div class="tabs">
+      <button class="tab active" data-tab="law">국가법령 검색</button>
+      <button class="tab" data-tab="ordin">자치법규(조례) 검색</button>
+    </div>
+
+    <div id="tabLaw" class="tab-panel active">
+      <div class="quickchips" id="lawQuickChips"></div>
+      <form id="lawSearchForm" class="searchbar">
+        <input id="lawQuery" type="text" placeholder="법령명 또는 키워드 검색 (예: 건축법, 주차장법)" />
+        <button type="submit" class="btn btn-primary">검색</button>
+      </form>
+      <div id="lawResults" class="results"></div>
+    </div>
+
+    <div id="tabOrdin" class="tab-panel">
+      <p class="hint hint-inline">지자체명과 키워드를 함께 넣으면 정확도가 높아져요. 예: <em>전주시 건축 조례</em></p>
+      <form id="ordinSearchForm" class="searchbar">
+        <input id="ordinQuery" type="text" placeholder="예) 전주시 건축 조례" />
+        <button type="submit" class="btn btn-primary">검색</button>
+      </form>
+      <div id="ordinResults" class="results"></div>
+    </div>
+  </section>
+
+  <!-- 우측: 선택 목록 -->
+  <section class="panel panel-selected">
+    <h2 class="panel-title">선택된 법규 <span id="selCount2" class="count-pill">0</span></h2>
+    <div id="selectedList" class="selected-list">
+      <p class="empty">아직 추가된 법령/조례가 없습니다.<br>왼쪽에서 검색 후 “보고서에 추가”를 눌러주세요.</p>
+    </div>
+    <button id="btnGoReport2" class="btn btn-seal btn-block">검토 보고서 생성하기</button>
+  </section>
+
+</main>
+
+<!-- 보고서 뷰 -->
+<main id="viewReport" class="report-wrap hidden">
+  <div class="report-toolbar noprint">
+    <button id="btnBackToSearch" class="btn btn-ghost">← 검색으로 돌아가기</button>
+    <button id="btnPrint" class="btn btn-primary">인쇄 / PDF로 저장</button>
+  </div>
+
+  <article class="report" id="reportRoot">
+    <header class="report-cover">
+      <svg class="cover-seal" viewBox="0 0 120 120" aria-hidden="true">
+        <circle cx="60" cy="60" r="54" fill="none" stroke="currentColor" stroke-width="4"/>
+        <text x="60" y="52" text-anchor="middle" font-size="24" font-weight="700" fill="currentColor">法規</text>
+        <text x="60" y="80" text-anchor="middle" font-size="18" font-weight="500" fill="currentColor">검토필</text>
+      </svg>
+      <p class="report-eyebrow">건축 관계법규 검토 보고서</p>
+      <h1 id="repTitle">사업명 미입력</h1>
+      <dl class="report-meta">
+        <div><dt>대상 지자체</dt><dd id="repRegion">-</dd></div>
+        <div><dt>건축물 용도</dt><dd id="repUse">-</dd></div>
+        <div><dt>연면적</dt><dd id="repArea">-</dd></div>
+        <div><dt>규모</dt><dd id="repFloors">-</dd></div>
+        <div><dt>작성일</dt><dd id="repDate">-</dd></div>
+      </dl>
+      <p class="report-note" id="repNote"></p>
+    </header>
+
+    <section class="report-section">
+      <h2>1. 적용 국가법령</h2>
+      <div id="repLaws" class="report-list"></div>
+    </section>
+
+    <section class="report-section">
+      <h2>2. 적용 지자체 조례</h2>
+      <div id="repOrdins" class="report-list"></div>
+    </section>
+
+    <section class="report-section">
+      <h2>3. 종합 검토의견</h2>
+      <textarea id="repOpinion" class="report-opinion" placeholder="검토자 의견을 직접 작성하세요. (예: 상기 법령·조례 검토 결과, 본 사업은 ○○ 절차 이행 후 인허가 진행이 가능할 것으로 판단됨. 세부 조문은 원문 링크를 통해 재확인 요망.)"></textarea>
+    </section>
+
+    <footer class="report-footer">
+      <p>본 보고서는 법제처 국가법령정보 공동활용(Open API)에서 조회한 원문 메타데이터를 기초로 작성되었습니다. 법적 효력이 있는 최종 판단은 반드시 국가법령정보센터 원문 및 소관 관청 확인을 거쳐야 합니다.</p>
+    </footer>
+  </article>
+</main>
+
+<div id="detailModal" class="modal hidden">
+  <div class="modal-card">
+    <button id="modalClose" class="modal-close" aria-label="닫기">✕</button>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "kc-law-review",
+  "version": "1.0.0",
+  "private": true,
+  "description": "국가법령 + 지자체 조례 실시간 검토 보고서 생성 웹앱 (법제처 국가법령정보 공동활용 Open API 기반)",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "xml2js": "^0.6.2"
+  }
+}
