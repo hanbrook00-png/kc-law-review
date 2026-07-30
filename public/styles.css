@@ -245,6 +245,15 @@ html, body {
 .calc-panel { display: none; }
 .calc-panel.active { display: block; }
 
+.calc-block-title {
+  font-family: var(--font-display); font-size: 13.5px; font-weight: 700;
+  margin: 20px 0 10px; padding-top: 14px; border-top: 1px dashed var(--line);
+}
+.calc-block-title:first-of-type { margin-top: 4px; padding-top: 0; border-top: none; }
+.field-check { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.field-check input[type="checkbox"] { width: 15px; height: 15px; flex-shrink: 0; }
+.field-check label { font-size: 12.5px; color: var(--ink-soft); }
+
 .calc-row-adder { display: flex; gap: 8px; margin: 14px 0; }
 .calc-row-adder select, .calc-row-adder input {
   font-family: var(--font-body); font-size: 13px; padding: 8px 10px;

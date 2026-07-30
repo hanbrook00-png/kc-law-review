@@ -69,12 +69,28 @@ const PARKING_UNSUPPORTED_NOTE =
   "단독주택·공동주택·오피스텔·골프장 등 세대수·정원·홀 단위 산정 항목은 이 계산기가 지원하지 않습니다. " +
   "「주택건설기준 등에 관한 규정」 제27조제1항 및 전주시 주차장 조례 별표7 4~6호를 국가법령정보센터에서 직접 확인해주세요.";
 
+/* ============================================================================
+ * 직통계단 2개소 이상 설치대상 데이터 — 건축법 시행령 제34조제2항 1~5호
+ * 출처: 법제처 국가법령정보 공동활용 API 실물 응답으로 원문 대조 확인 (2026.7.28. 시행본)
+ * ========================================================================== */
+
+const STAIR_MULTI_TABLE = [
+  { id: "h1a", label: "문화·집회시설(전시장·동식물원 제외)·종교시설·위락시설 중 주점영업·장례시설", floorMin: null, threshold: 200, note: "제34조제2항제1호" },
+  { id: "h1b", label: "제2종근린생활시설 중 공연장·종교집회장", floorMin: null, threshold: 300, note: "제34조제2항제1호 단서" },
+  { id: "h2a", label: "다중주택·다가구주택, 정신과의원(입원실), 학원·독서실, 판매시설, 운수시설(여객), 의료시설(입원실 없는 치과병원 제외), 노유자시설 중 아동·노인·장애인거주시설, 장애인의료재활시설, 유스호스텔, 숙박시설", floorMin: 3, threshold: 200, note: "제34조제2항제2호" },
+  { id: "h2b", label: "제2종근린생활시설 중 인터넷컴퓨터게임시설제공업소 (300㎡ 이상인 경우만 해당)", floorMin: 3, threshold: 300, note: "제34조제2항제2호 단서" },
+  { id: "h3", label: "공동주택(층당 4세대 초과) 또는 업무시설 중 오피스텔", floorMin: null, threshold: 300, note: "제34조제2항제3호", isApartment: true },
+  { id: "h4", label: "제1~3호 외 용도", floorMin: 3, threshold: 400, note: "제34조제2항제4호" },
+  { id: "h5", label: "지하층", floorMin: null, threshold: 200, note: "제34조제2항제5호", isBasement: true },
+];
+
 const state = {
   project: {},
   selected: [], // { key, kind: 'law'|'ordin', title, mst, promul, enforce, org, kind_ }
   calcItems: [], // { key, category, label, formula, value, standard, verdict, relatedLaw }
   parkingRows: [], // { useId, area }
   ratio: {},       // 건폐율/용적률/조경 입력값 저장
+  stair: {},       // 직통계단·피난거리 입력값 저장
 };
 
 /* ---------------- 유틸 ---------------- */
@@ -306,12 +322,14 @@ document.querySelectorAll(".tab").forEach((tab) => {
   });
 });
 
+const CALC_PANEL_IDS = { parking: "calcParking", ratio: "calcRatio", stair: "calcStair" };
+
 document.querySelectorAll(".calc-subtab").forEach((tab) => {
   tab.addEventListener("click", () => {
     document.querySelectorAll(".calc-subtab").forEach((t) => t.classList.remove("active"));
     document.querySelectorAll(".calc-panel").forEach((p) => p.classList.remove("active"));
     tab.classList.add("active");
-    document.getElementById(tab.dataset.calc === "parking" ? "calcParking" : "calcRatio").classList.add("active");
+    document.getElementById(CALC_PANEL_IDS[tab.dataset.calc]).classList.add("active");
   });
 });
 
@@ -625,6 +643,243 @@ document.getElementById("btnAddRatioToReport").addEventListener("click", () => {
   results.forEach((r) => addCalcItem(r));
 });
 
+/* ============================================================================
+ * 자동 판정 계산기 — 직통계단 · 피난거리 (건축법 시행령 제34조 · 제35조)
+ * ========================================================================== */
+
+function initStairMultiSelect() {
+  const sel = document.getElementById("stMultiUse");
+  sel.appendChild(el("option", { value: "" }, "해당없음 (판정 안 함)"));
+  STAIR_MULTI_TABLE.forEach((row) => {
+    const cond = [`${row.threshold}㎡ 이상`];
+    if (row.floorMin) cond.push(`${row.floorMin}층 이상`);
+    if (row.isBasement) cond.push("지하층");
+    sel.appendChild(el("option", { value: row.id }, `${row.label} [${row.note}, ${cond.join(" · ")}]`));
+  });
+}
+
+function computeStairDistance() {
+  const distanceRaw = document.getElementById("stDistance").value;
+  const distance = parseFloat(distanceRaw);
+  if (!distanceRaw || Number.isNaN(distance)) return null;
+
+  const fireResistant = document.getElementById("stFireResistant").checked;
+  const apt16 = document.getElementById("stApt16").checked;
+  const basementExcl = document.getElementById("stBasementExcl").checked;
+  const factoryType = document.getElementById("stFactoryType").value;
+
+  let allowed = 30;
+  let basis = "원칙 30m 이하 (제34조제1항 본문)";
+  if (factoryType === "auto") {
+    allowed = 75;
+    basis = "자동화 생산시설 + 자동식 소화설비 설치 공장 → 75m 이하 (제34조제1항 단서)";
+  } else if (factoryType === "unmanned") {
+    allowed = 100;
+    basis = "무인화 공장 → 100m 이하 (제34조제1항 단서)";
+  } else if (fireResistant && basementExcl) {
+    basis = "내화구조/불연재료이나 지하층 대규모 공연장·집회장·관람장·전시장(바닥면적 300㎡ 이상)에 해당해 완화 제외 → 30m 이하";
+  } else if (fireResistant) {
+    allowed = apt16 ? 40 : 50;
+    basis = apt16
+      ? "내화구조/불연재료 + 공동주택 16층 이상인 층 → 40m 이하 (제34조제1항 단서)"
+      : "내화구조/불연재료 → 50m 이하 (제34조제1항 단서)";
+  }
+
+  const ok = distance <= allowed;
+  return {
+    category: "직통계단·피난거리", label: "보행거리",
+    formula: `실제 보행거리 ${distance}m vs 허용 ${allowed}m (${basis})`,
+    value: `${distance}m`,
+    standard: `${allowed}m 이하`,
+    verdict: ok ? "적합" : "부적합",
+    relatedLaw: "건축법 시행령 제34조제1항",
+  };
+}
+
+function computeStairMulti() {
+  const useId = document.getElementById("stMultiUse").value;
+  if (!useId) return null;
+  const def = STAIR_MULTI_TABLE.find((d) => d.id === useId);
+  if (!def) return null;
+
+  const areaRaw = document.getElementById("stMultiArea").value;
+  const area = parseFloat(areaRaw);
+  if (!areaRaw || Number.isNaN(area)) return null;
+
+  const floor = parseFloat(document.getElementById("stMultiFloor").value);
+  const units = parseFloat(document.getElementById("stMultiUnits").value);
+  const installedRaw = document.getElementById("stMultiInstalled").value;
+  const installed = parseFloat(installedRaw);
+
+  let floorOk = true;
+  if (def.floorMin) floorOk = !Number.isNaN(floor) && floor >= def.floorMin;
+  const areaOk = area >= def.threshold;
+  const unitsExcluded = !!def.isApartment && !Number.isNaN(units) && units <= 4;
+  const target = floorOk && areaOk && !unitsExcluded;
+  const required = target ? 2 : 1;
+
+  const formulaParts = [`바닥면적 ${area}㎡ (기준 ${def.threshold}㎡, ${areaOk ? "충족" : "미충족"})`];
+  if (def.floorMin) formulaParts.push(`${Number.isNaN(floor) ? "층수 미입력" : floor + "층"} (기준 ${def.floorMin}층 이상, ${floorOk ? "충족" : "미충족"})`);
+  if (def.isApartment) formulaParts.push(Number.isNaN(units) ? "세대수 미입력(오피스텔 등)" : `층당 ${units}세대 (${unitsExcluded ? "4세대 이하 → 대상 제외" : "4세대 초과"})`);
+
+  let verdict = "확인필요";
+  if (installedRaw && !Number.isNaN(installed)) verdict = installed >= required ? "적합" : "부적합";
+
+  return {
+    category: "직통계단·피난거리",
+    label: `직통계단 개소수 — ${def.label}`,
+    formula: formulaParts.join(" / "),
+    value: `법정 ${required}개소 이상 / 실제 ${installedRaw ? installed + "개소" : "미입력"}`,
+    standard: `${def.note}` + (target ? " — 2개소 이상 설치대상" : " — 기준 미충족(일반기준 1개소)"),
+    verdict,
+    relatedLaw: "건축법 시행령 제34조제2항",
+  };
+}
+
+const STAIR_LEVEL = { general: 0, escape: 1, special: 2 };
+const STAIR_LEVEL_LABEL = { general: "일반 직통계단", escape: "피난계단", special: "특별피난계단" };
+
+function computeStairEvac() {
+  const floorType = document.getElementById("stPeFloorType").value;
+  const floorNumRaw = document.getElementById("stPeFloorNum").value;
+  const floorNum = parseFloat(floorNumRaw);
+  if (!floorNumRaw || Number.isNaN(floorNum)) return [];
+
+  const areaRaw = document.getElementById("stPeArea").value;
+  const area = parseFloat(areaRaw);
+  const apartment = document.getElementById("stPeApartment").checked;
+  const gatBokdo = document.getElementById("stPeGatBokdo").checked;
+  const fireResistant = document.getElementById("stPeFireResistant").checked;
+  const compart = document.getElementById("stPeCompart").checked;
+  const sales = document.getElementById("stPeSales").checked;
+  const installedRaw = document.getElementById("stPeInstalled").value;
+
+  const article1Target = (floorType === "above" && floorNum >= 5) || (floorType === "below" && floorNum >= 2);
+  const article1Exception = fireResistant && (
+    (floorType === "above" && floorNum >= 5 && !Number.isNaN(area) && area <= 200) || compart
+  );
+
+  const specialThreshold = apartment ? 16 : 11;
+  const article2Target = !gatBokdo && !Number.isNaN(area) && area >= 400 && (
+    (floorType === "above" && floorNum >= specialThreshold) ||
+    (floorType === "below" && floorNum >= 3)
+  );
+
+  let requiredLevel, requiredLabel, basis;
+  if (article2Target) {
+    requiredLevel = 2;
+    requiredLabel = "특별피난계단";
+    basis = `${floorType === "above" ? "지상" : "지하"} ${floorNum}층 + 바닥면적 ${area}㎡(400㎡ 이상) → ${floorType === "above" ? `기준 ${specialThreshold}층 이상(공동주택 16층/그 외 11층)` : "지하 3층 이하"} 충족 (제35조제2항)`;
+  } else if (article1Target && !article1Exception) {
+    requiredLevel = 1;
+    requiredLabel = "피난계단 이상(특별피난계단도 가능)";
+    basis = `${floorType === "above" ? "지상 5층 이상" : "지하 2층 이하"} (${floorNum}층) → 원칙 대상 (제35조제1항)`;
+  } else if (article1Target && article1Exception) {
+    requiredLevel = 0;
+    requiredLabel = "설치의무 없음 (예외 적용)";
+    basis = "원칙 대상이나 내화구조/불연재료 + (바닥면적 200㎡ 이하 또는 200㎡ 이내마다 방화구획) 단서 적용 (제35조제1항 단서)";
+  } else {
+    requiredLevel = 0;
+    requiredLabel = "설치의무 없음";
+    basis = `${floorType === "above" ? "지상 5층 미만" : "지하 1층"}으로 제35조 적용대상 아님`;
+  }
+
+  const installedLevel = STAIR_LEVEL[installedRaw];
+  let verdict = "확인필요";
+  if (installedLevel !== undefined) verdict = installedLevel >= requiredLevel ? "적합" : "부적합";
+
+  const results = [{
+    category: "직통계단·피난거리",
+    label: "피난계단/특별피난계단",
+    formula: basis,
+    value: `기준: ${requiredLabel} / 실제: ${installedRaw ? STAIR_LEVEL_LABEL[installedRaw] : "미입력"}`,
+    standard: requiredLabel,
+    verdict,
+    relatedLaw: "건축법 시행령 제35조",
+  }];
+
+  if (sales && (article1Target || article2Target)) {
+    results.push({
+      category: "직통계단·피난거리",
+      label: "판매시설 특별피난계단 특칙",
+      formula: "판매시설 용도로 쓰는 층의 직통계단 중 1개소 이상은 특별피난계단으로 설치해야 함 (개소별 형식은 이 계산기가 구분하지 않으므로 도면에서 개별 확인 필요)",
+      value: "1개소 이상 특별피난계단 필요",
+      standard: "제35조제3항",
+      verdict: "확인필요",
+      relatedLaw: "건축법 시행령 제35조제3항",
+    });
+  }
+  return results;
+}
+
+function computeStairAll() {
+  const results = [];
+  const d = computeStairDistance();
+  if (d) results.push(d);
+  const m = computeStairMulti();
+  if (m) results.push(m);
+  results.push(...computeStairEvac());
+  return results;
+}
+
+function renderStairResults() {
+  const body = document.getElementById("stairRowsBody");
+  body.innerHTML = "";
+  const results = computeStairAll();
+  state._stairResults = results;
+
+  if (results.length === 0) {
+    body.appendChild(el("tr", {}, el("td", { colspan: "5", class: "state-msg" }, "A·B·C 중 값을 입력한 항목만 계산됩니다. 위에 값을 입력한 뒤 계산하기를 눌러주세요.")));
+    return;
+  }
+
+  results.forEach((r) => {
+    body.appendChild(el("tr", {}, [
+      el("td", {}, r.label),
+      el("td", {}, r.formula),
+      el("td", { class: "num" }, r.value),
+      el("td", {}, r.standard),
+      el("td", {}, verdictBadge(r.verdict)),
+    ]));
+  });
+}
+
+const STAIR_TEXT_FIELDS = [
+  "stDistance", "stFactoryType",
+  "stMultiUse", "stMultiFloor", "stMultiArea", "stMultiUnits", "stMultiInstalled",
+  "stPeFloorType", "stPeFloorNum", "stPeArea", "stPeInstalled",
+];
+const STAIR_CHECK_FIELDS = [
+  "stFireResistant", "stApt16", "stBasementExcl",
+  "stPeApartment", "stPeGatBokdo", "stPeFireResistant", "stPeCompart", "stPeSales",
+];
+
+function saveStairInputs() {
+  STAIR_TEXT_FIELDS.forEach((id) => { state.stair[id] = document.getElementById(id).value; });
+  STAIR_CHECK_FIELDS.forEach((id) => { state.stair[id] = document.getElementById(id).checked; });
+  saveState();
+}
+
+function restoreStairInputs() {
+  STAIR_TEXT_FIELDS.forEach((id) => {
+    if (state.stair[id] !== undefined) document.getElementById(id).value = state.stair[id];
+  });
+  STAIR_CHECK_FIELDS.forEach((id) => {
+    if (state.stair[id] !== undefined) document.getElementById(id).checked = state.stair[id];
+  });
+}
+
+document.getElementById("btnCalcStair").addEventListener("click", () => {
+  saveStairInputs();
+  renderStairResults();
+});
+
+document.getElementById("btnAddStairToReport").addEventListener("click", () => {
+  const results = state._stairResults && state._stairResults.length ? state._stairResults : computeStairAll();
+  if (!results.length) return;
+  results.forEach((r) => addCalcItem(r));
+});
+
 /* ---------------- 자동 판정 항목 공통 처리 ---------------- */
 
 function addCalcItem(item) {
@@ -762,4 +1017,6 @@ renderQuickChips();
 initParkingSelect();
 renderParkingRows();
 restoreRatioInputs();
+initStairMultiSelect();
+restoreStairInputs();
 renderSelected();

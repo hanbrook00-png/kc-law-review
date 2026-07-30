@@ -98,6 +98,7 @@
       <div class="calc-subtabs">
         <button class="calc-subtab active" data-calc="parking">주차대수 산정</button>
         <button class="calc-subtab" data-calc="ratio">건폐율 · 용적률 · 조경면적</button>
+        <button class="calc-subtab" data-calc="stair">직통계단 · 피난거리</button>
       </div>
 
       <!-- 주차대수 산정 -->
@@ -176,6 +177,97 @@
 
         <button id="btnCalcRatio" type="button" class="btn btn-primary">계산하기</button>
         <button id="btnAddRatioToReport" type="button" class="btn btn-seal">이 산정 결과를 보고서에 추가</button>
+      </div>
+
+      <!-- 직통계단 · 피난거리 -->
+      <div id="calcStair" class="calc-panel">
+        <p class="hint hint-inline">건축법 시행령 제34조(직통계단의 설치)·제35조(피난계단의 설치) 기준입니다. 모두 "피난층 외의 층"을 전제로 하며, A/B/C 각 블록은 값을 입력한 항목만 계산됩니다.</p>
+
+        <h3 class="calc-block-title">A. 보행거리 판정 (제34조제1항)</h3>
+        <div class="field-row">
+          <div class="field">
+            <label for="stDistance">실제 보행거리(m) — 거실 각 부분 → 가장 가까운 직통계단</label>
+            <input id="stDistance" type="text" inputmode="decimal" placeholder="예) 35" />
+          </div>
+          <div class="field">
+            <label for="stFactoryType">자동화 공장 여부</label>
+            <select id="stFactoryType">
+              <option value="none">해당없음</option>
+              <option value="auto">자동화 생산시설 + 자동식 소화설비 설치 공장 (75m)</option>
+              <option value="unmanned">무인화 공장 (100m)</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-check"><input type="checkbox" id="stFireResistant" /><label for="stFireResistant">주요구조부가 내화구조 또는 불연재료</label></div>
+        <div class="field-check"><input type="checkbox" id="stApt16" /><label for="stApt16">공동주택이며 해당 층이 16층 이상</label></div>
+        <div class="field-check"><input type="checkbox" id="stBasementExcl" /><label for="stBasementExcl">지하층 설치 공연장·집회장·관람장·전시장(바닥면적 합계 300㎡ 이상) — 완화 제외 대상</label></div>
+
+        <h3 class="calc-block-title">B. 직통계단 2개소 이상 설치대상 (제34조제2항)</h3>
+        <div class="field">
+          <label for="stMultiUse">용도 구분</label>
+          <select id="stMultiUse"></select>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="stMultiFloor">층수 (지상 기준, 예: 3)</label>
+            <input id="stMultiFloor" type="text" inputmode="numeric" placeholder="예) 3" />
+          </div>
+          <div class="field">
+            <label for="stMultiArea">해당 용도 바닥면적 합계(㎡)</label>
+            <input id="stMultiArea" type="text" inputmode="decimal" placeholder="예) 250" />
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="stMultiUnits">층당 세대수 — 공동주택인 경우만 입력(오피스텔은 비워두세요)</label>
+            <input id="stMultiUnits" type="text" inputmode="numeric" placeholder="예) 6" />
+          </div>
+          <div class="field">
+            <label for="stMultiInstalled">실제 설치된 직통계단 개소수</label>
+            <input id="stMultiInstalled" type="text" inputmode="numeric" placeholder="예) 1" />
+          </div>
+        </div>
+
+        <h3 class="calc-block-title">C. 피난계단 · 특별피난계단 설치대상 (제35조)</h3>
+        <div class="field-row">
+          <div class="field">
+            <label for="stPeFloorType">층 종류</label>
+            <select id="stPeFloorType">
+              <option value="above">지상층</option>
+              <option value="below">지하층</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="stPeFloorNum">층수 (양수, 예: 지상 11층→11 / 지하 3층→3)</label>
+            <input id="stPeFloorNum" type="text" inputmode="numeric" placeholder="예) 11" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="stPeArea">해당 층 바닥면적(㎡)</label>
+          <input id="stPeArea" type="text" inputmode="decimal" placeholder="예) 500" />
+        </div>
+        <div class="field-check"><input type="checkbox" id="stPeApartment" /><label for="stPeApartment">공동주택 (특별피난계단 기준층이 11층→16층으로 완화)</label></div>
+        <div class="field-check"><input type="checkbox" id="stPeGatBokdo" /><label for="stPeGatBokdo">갓복도식 공동주택 (특별피난계단 강제 대상에서 제외)</label></div>
+        <div class="field-check"><input type="checkbox" id="stPeFireResistant" /><label for="stPeFireResistant">주요구조부 내화구조 또는 불연재료</label></div>
+        <div class="field-check"><input type="checkbox" id="stPeCompart" /><label for="stPeCompart">지상 5층 이상 층의 바닥면적 200㎡ 이내마다 방화구획 되어있음</label></div>
+        <div class="field-check"><input type="checkbox" id="stPeSales" /><label for="stPeSales">판매시설 용도로 쓰는 층</label></div>
+        <div class="field">
+          <label for="stPeInstalled">실제 설치형태</label>
+          <select id="stPeInstalled">
+            <option value="">선택 안 함</option>
+            <option value="general">일반 직통계단</option>
+            <option value="escape">피난계단</option>
+            <option value="special">특별피난계단</option>
+          </select>
+        </div>
+
+        <table class="calc-table">
+          <thead><tr><th>항목</th><th>산출근거</th><th>산출값</th><th>기준</th><th>판정</th></tr></thead>
+          <tbody id="stairRowsBody"></tbody>
+        </table>
+
+        <button id="btnCalcStair" type="button" class="btn btn-primary">계산하기</button>
+        <button id="btnAddStairToReport" type="button" class="btn btn-seal">이 산정 결과를 보고서에 추가</button>
       </div>
     </div>
   </section>
