@@ -25,7 +25,7 @@ const FIELD_MAP = {
     kind: ["법령구분명"],
   },
   ordin: {
-    listKey: ["LawSearch.law", "law", "LawSearch.Ordin", "Ordin"],
+listKey: ["OrdinSearch.law", "LawSearch.law", "law", "LawSearch.Ordin", "Ordin"],
     title: ["자치법규명", "법령명한글"],
     mst: ["자치법규일련번호", "법령일련번호", "MST"],
     promul: ["공포일자"],
